@@ -32,22 +32,24 @@ public partial class MainWindow : Window
  bool _requireQrForRecord;
  readonly Stopwatch elapsed=new();
  // Camera QR
- readonly CommunicationManager communication=new();
- readonly CameraService camera=new();
- readonly QrDecoderService qr=new();
- readonly SessionService session=new();
+ readonly CommunicationManager communication;
+ readonly CameraService camera;
+ readonly QrDecoderService qr;
+ readonly SessionService session;
  UC2836Service? ucService;
  CancellationTokenSource? camCancel;
  Task? camTask;
  PreviewFrame? camFrame;
- public MainWindow()
+ public MainWindow(CommunicationManager communication, CameraService camera, QrDecoderService qr, SessionService session)
  {
+  this.communication=communication;this.camera=camera;this.qr=qr;this.session=session;
   InitializeComponent();
   MinHeight=620;MinWidth=1100;
   Width=Math.Min(1560,SystemParameters.WorkArea.Width);
   Height=Math.Min(860,SystemParameters.WorkArea.Height);
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
   History.ItemsSource=rows;RefreshPorts();LoadCamSources();
+  if(camera.IsStreaming){CamToggle.Content="Tắt";CamToggle.Background=new SolidColorBrush(Color.FromRgb(174,72,65));}
   CamEnhance.IsChecked=false;CamInvert.IsChecked=false;CamSharpen.IsChecked=false;CamShowProcessed.IsChecked=false;CamZoom.Value=1.0;
   camera.FrameReady+=f=>Interlocked.Exchange(ref camFrame,f);
   camera.CodeRead+=code=>Dispatcher.Invoke(()=>OnCamCode(code));
@@ -82,7 +84,7 @@ public partial class MainWindow : Window
  void CamSettings_Changed(object sender,RoutedEventArgs e){if(CamZoomLabel is null)return;CamZoomLabel.Text=$"{CamZoom.Value:F1}×";ApplyCamSettings();}
  async void CamToggle_Click(object sender,RoutedEventArgs e)
  {
-  if(camTask is not null){camCancel?.Cancel();CamToggle.IsEnabled=false;CamStatus.Text="Đang tắt camera…";return;}
+  if(camera.IsStreaming || camTask is not null){camCancel?.Cancel();CamToggle.IsEnabled=false;CamStatus.Text="Đang tắt camera…";await camera.StopAsync();CamToggle.IsEnabled=true;CamToggle.Content="Bật";CamToggle.Background=new SolidColorBrush(Color.FromRgb(8,126,117));return;}
   if(CamSources.SelectedItem is not CameraSource src)return;
   camCancel=new();CamSources.IsEnabled=false;CamToggle.Content="Tắt";CamToggle.Background=new SolidColorBrush(Color.FromRgb(174,72,65));
   ApplyCamSettings();
@@ -267,12 +269,13 @@ public partial class MainWindow : Window
  async void Window_Closing(object? sender,CancelEventArgs e)
  {
   if(closing)return;
-  if(running is not null||camTask is not null)
+  if(running is not null||camTask is not null||camera.IsStreaming)
   {
    e.Cancel=true;
    cancellation?.Cancel();camCancel?.Cancel();
    try{if(running is not null)await running;}catch{}
    try{if(camTask is not null)await camTask;}catch{}
+   try{await camera.StopAsync();}catch{}
    closing=true;Close();
   }
  }

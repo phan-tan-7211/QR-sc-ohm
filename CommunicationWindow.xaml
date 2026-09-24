@@ -1,0 +1,42 @@
+<Window x:Class="UC2836Live.CommunicationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="QR-SC-OHM · Communication" Width="920" Height="680"
+        MinWidth="720" MinHeight="560" Background="#EEF3F7" Foreground="#142D43"
+        FontFamily="Segoe UI" FontSize="15">
+  <Grid Margin="28">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <StackPanel>
+      <TextBlock Text="QR-SC-OHM" FontSize="32" FontWeight="SemiBold" Foreground="#0A3B5D"/>
+      <TextBlock Text="COMMUNICATION · KIỂM TRA THIẾT BỊ" Margin="0,4,0,22" Foreground="#47718D"/>
+    </StackPanel>
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Border Grid.Column="0" Background="White" CornerRadius="12" Padding="22" Margin="0,0,10,0">
+        <StackPanel>
+          <TextBlock Text="UC2836" FontSize="22" FontWeight="SemiBold"/>
+          <TextBlock x:Name="UcState" Text="● DISCONNECTED" Margin="0,7,0,16" Foreground="#B45545"/>
+          <DockPanel Margin="0,0,0,12"><TextBlock Text="COM" VerticalAlignment="Center" Width="72"/><ComboBox x:Name="Port" MinHeight="34"/><Button x:Name="RefreshPortButton" Content="↻" Width="40" Margin="8,0,0,0" Click="RefreshPorts_Click"/></DockPanel>
+          <StackPanel Orientation="Horizontal"><Button Content="Test" Click="Test_Click" Padding="18,8" Margin="0,0,8,0"/><Button Content="Reconnect" Click="Reconnect_Click" Padding="18,8"/></StackPanel>
+          <TextBlock x:Name="UcDetail" Text="Chưa kiểm tra thiết bị" Margin="0,18,0,0" TextWrapping="Wrap" Foreground="#47718D"/>
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="1" Background="White" CornerRadius="12" Padding="22" Margin="10,0,0,0">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <DockPanel><TextBlock Text="CAMERA" FontSize="22" FontWeight="SemiBold"/><Button x:Name="CameraRetry" DockPanel.Dock="Right" Content="Retry" Click="CameraRetry_Click" Padding="12,5"/></DockPanel>
+          <Border Grid.Row="1" Background="#102638" CornerRadius="7" Margin="0,12,0,12" MinHeight="230"><Grid><Image x:Name="Preview" Stretch="Uniform"/><TextBlock x:Name="PreviewPlaceholder" Text="LIVE PREVIEW" Foreground="#9FB5C4" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18"/></Grid></Border>
+          <DockPanel Grid.Row="2"><TextBlock Text="Camera" VerticalAlignment="Center" Width="72"/><ComboBox x:Name="CameraSources" SelectionChanged="CameraSources_SelectionChanged" MinHeight="34"/></DockPanel>
+          <TextBlock Grid.Row="3" x:Name="CameraState" Text="● DISCONNECTED" Margin="0,10,0,0" Foreground="#B45545"/>
+          <StackPanel Grid.Row="4" Margin="0,8,0,0"><TextBlock x:Name="QrState" Text="QR Decoder  ● NOT READY"/><TextBlock x:Name="LastQr" Text="Last QR: —" Margin="0,4,0,0" Foreground="#087567"/></StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+    <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,20,0,0">
+      <TextBlock x:Name="StorageState" Text="● STORAGE · CHECKING" HorizontalAlignment="Center" Foreground="#47718D"/>
+      <TextBlock x:Name="Readiness" Text="UC2836 ○   CAMERA ○   QR ○   STORAGE ○" HorizontalAlignment="Center" Margin="0,8,0,0" FontWeight="SemiBold"/>
+      <TextBlock x:Name="SystemState" Text="SYSTEM NOT READY" HorizontalAlignment="Center" Margin="0,12,0,10" FontSize="18" FontWeight="SemiBold" Foreground="#B45545"/>
+      <Button x:Name="EnterSystem" Content="ENTER SYSTEM" IsEnabled="False" Click="EnterSystem_Click" Padding="30,12" FontSize="16" Background="#087E75" Foreground="White"/>
+    </StackPanel>
+  </Grid>
+</Window>
