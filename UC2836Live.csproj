@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="System.IO.Ports" Version="4.6.0" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\QrCameraLab\QrCamera.Module\QrCamera.Module.csproj" /></ItemGroup>
+</Project>

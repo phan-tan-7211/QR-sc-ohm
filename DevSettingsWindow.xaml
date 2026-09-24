@@ -1,0 +1,47 @@
+<Window x:Class="UC2836Live.DevSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cài đặt thông số" Width="430" Height="340"
+        ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        Background="#EEF3F7" FontFamily="Segoe UI" FontSize="14" Foreground="#142D43">
+ <Grid Margin="24,20">
+  <Grid.RowDefinitions>
+   <RowDefinition Height="Auto"/>
+   <RowDefinition Height="14"/>
+   <RowDefinition Height="Auto"/>
+   <RowDefinition Height="14"/>
+   <RowDefinition Height="Auto"/>
+   <RowDefinition Height="14"/>
+   <RowDefinition Height="Auto"/>
+   <RowDefinition Height="12"/>
+   <RowDefinition Height="Auto"/>
+   <RowDefinition Height="20"/>
+   <RowDefinition Height="Auto"/>
+  </Grid.RowDefinitions>
+  <Grid.ColumnDefinitions>
+   <ColumnDefinition Width="*"/>
+   <ColumnDefinition Width="90"/>
+  </Grid.ColumnDefinitions>
+
+  <StackPanel>
+   <TextBlock Text="QR hết hạn sau (giây)" FontWeight="SemiBold"/>
+   <TextBlock Text="Thời gian tối đa từ lần đọc cuối đến khi máy kích đo" FontSize="11" Foreground="#435E73" Margin="0,2,0,0" TextWrapping="Wrap"/>
+  </StackPanel>
+  <TextBox x:Name="TbTimeout" Grid.Column="1" Padding="8,6" TextAlignment="Right" VerticalAlignment="Top"/>
+
+  <StackPanel Grid.Row="2">
+   <TextBlock Text="Re-scan gate (ms)" FontWeight="SemiBold"/>
+   <TextBlock Text="Khoảng dừng giữa các lần camera đọc lại cùng mã" FontSize="11" Foreground="#435E73" Margin="0,2,0,0" TextWrapping="Wrap"/>
+  </StackPanel>
+  <TextBox x:Name="TbRescan" Grid.Row="2" Grid.Column="1" Padding="8,6" TextAlignment="Right" VerticalAlignment="Top"/>
+
+  <CheckBox x:Name="CbRequireQr" Grid.Row="4" Grid.ColumnSpan="2" Content="Bắt buộc có QR mới ghi kết quả đo" VerticalAlignment="Center"/>
+
+  <TextBlock Grid.Row="8" Grid.ColumnSpan="2" x:Name="ErrMsg" Foreground="#B03030" FontSize="12" Visibility="Collapsed" TextWrapping="Wrap"/>
+
+  <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
+   <Button Content="Hủy" Click="Cancel_Click" Padding="16,8" Margin="0,0,8,0"/>
+   <Button Content="Áp dụng" Click="Apply_Click" Padding="16,8" Background="#087E75" Foreground="White"/>
+  </StackPanel>
+ </Grid>
+</Window>

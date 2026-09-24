@@ -1,0 +1,10 @@
+.vs/
+bin/
+obj/
+release/
+release-*/
+Sessions/
+*.user
+*.suo
+errors.log
+verification.txt
