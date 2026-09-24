@@ -1,5 +1,6 @@
 using System.Windows;
 using System.IO;
+using XamlMcp.Wpf;
 
 namespace UC2836Live;
 public partial class App : Application
@@ -7,6 +8,9 @@ public partial class App : Application
  protected override async void OnStartup(StartupEventArgs e)
  {
   base.OnStartup(e);
+#if DEBUG
+  this.AttachXamlMcp();
+#endif
   if (e.Args.Contains("--self-test") || e.Args.Contains("--probe"))
   {
    try
