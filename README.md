@@ -1,5 +1,9 @@
 # UC2836CX+ Live View
 
+## UI/UX design memory
+
+Các quy tắc giao diện lâu dài nằm trong [AGENTS.md](AGENTS.md) và [docs/design](docs/design/). Đọc `DESIGN_SYSTEM.md`, `UX_SPEC.md` và `LAYOUT_SPEC.md` trước khi sửa WPF UI. Các repo bên ngoài chỉ được ghi nhận trong `REFERENCES.md`, không được copy vào source.
+
 Ứng dụng C# / WPF cho Windows, giao tiếp **USB CDC qua cổng COM ảo bằng SCPI ASCII**. Không dùng Modbus, USB-TMC, GPIB hoặc HID. Xem [AI_CONTEXT.md](AI_CONTEXT.md) trước khi sửa giao tiếp thiết bị.
 
 ## Chạy
