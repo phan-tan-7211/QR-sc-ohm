@@ -50,3 +50,12 @@
 - `UC2836CX+\\manual\\UC2835-36系列SCPI指令集.pdf`
 - `UC2836CX+\\manual\\UC2836CX User Manual.pdf`
 - `UC2836CX+\\manual\\UC2835+系列Modbus通讯协议.pdf` (giao thức khác, không dùng trong app hiện tại)
+
+## Kiến trúc ứng dụng hiện tại
+
+- `Services/CommunicationManager.cs` là nơi duy nhất sở hữu kết nối USB CDC/COM đang sống; UI nhận `Device` từ manager và không tự mở `SerialPort`.
+- `Services/UC2836Service.cs` là facade cho lệnh SCPI, đọc cấu hình và phân tích kết quả.
+- `Services/CameraService.cs` sở hữu `QrScanner`; `Services/QrDecoderService.cs` giữ mã QR và thời hạn mã.
+- `Services/SessionService.cs` tạo/ghi CSV phiên đo.
+- `Models/ConnectionState.cs` và `Models/MeasurementResult.cs` chứa trạng thái kết nối và kết quả đo dùng chung.
+- `MainWindow.xaml.cs` chỉ điều phối UI, nhận dữ liệu từ các service và cập nhật màn hình.

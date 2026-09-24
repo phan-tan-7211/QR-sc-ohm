@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.IO.Ports;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,6 +11,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using Microsoft.Win32;
 using QrCamera.Module;
+using UC2836Live.Models;
+using UC2836Live.Services;
 
 namespace UC2836Live;
 public partial class MainWindow : Window
@@ -31,7 +32,11 @@ public partial class MainWindow : Window
  bool _requireQrForRecord;
  readonly Stopwatch elapsed=new();
  // Camera QR
- readonly QrScanner camScanner=new();
+ readonly CommunicationManager communication=new();
+ readonly CameraService camera=new();
+ readonly QrDecoderService qr=new();
+ readonly SessionService session=new();
+ UC2836Service? ucService;
  CancellationTokenSource? camCancel;
  Task? camTask;
  PreviewFrame? camFrame;
@@ -44,9 +49,9 @@ public partial class MainWindow : Window
   WindowStartupLocation=WindowStartupLocation.CenterScreen;
   History.ItemsSource=rows;RefreshPorts();LoadCamSources();
   CamEnhance.IsChecked=false;CamInvert.IsChecked=false;CamSharpen.IsChecked=false;CamShowProcessed.IsChecked=false;CamZoom.Value=1.0;
-  camScanner.FrameReady+=f=>Interlocked.Exchange(ref camFrame,f);
-  camScanner.CodeRead+=r=>Dispatcher.Invoke(()=>OnCamCode(r.Code));
-  camScanner.StatusChanged+=t=>Dispatcher.Invoke(()=>CamStatus.Text=t);
+  camera.FrameReady+=f=>Interlocked.Exchange(ref camFrame,f);
+  camera.CodeRead+=code=>Dispatcher.Invoke(()=>OnCamCode(code));
+  camera.StatusChanged+=t=>Dispatcher.Invoke(()=>CamStatus.Text=t);
   var renderTimer=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(80)};
   renderTimer.Tick+=(_,_)=>RenderTick();
   renderTimer.Start();
@@ -56,29 +61,24 @@ public partial class MainWindow : Window
   var f=Interlocked.Exchange(ref camFrame,null);
   if(f is not null){var bmp=BitmapSource.Create(f.Width,f.Height,96,96,PixelFormats.Bgr24,null,f.Bgr,f.Stride);bmp.Freeze();CamPreview.Source=bmp;CamPlaceholder.Visibility=Visibility.Collapsed;}
   // Kiểm tra QR hết hạn mỗi 80ms
-  var ticks=Interlocked.Read(ref _lastQrTicks);
-  if(ticks>0&&!string.IsNullOrEmpty(currentQr))
+  if(qr.IsExpired(_qrMaxAgeSec))
   {
-   var ageSec=(DateTimeOffset.Now.Ticks-ticks)/(double)TimeSpan.TicksPerSecond;
-   if(ageSec>_qrMaxAgeSec)
-   {
-    currentQr="";Interlocked.Exchange(ref _lastQrTicks,0);
+    qr.Clear(); currentQr=""; Interlocked.Exchange(ref _lastQrTicks,0);
     QrInput.Text="";
     QrState.Text="⚠ QR hết hạn · Đưa sản phẩm vào camera để quét lại";
     QrState.Foreground=new SolidColorBrush(Color.FromRgb(180,90,0));
     CamQrResult.Text="Hết hạn";CamQrResult.Foreground=new SolidColorBrush(Color.FromRgb(180,90,0));
-   }
   }
  }
- void RefreshPorts() {var selected=Port.Text;Port.ItemsSource=SerialPort.GetPortNames().Order().ToArray();Port.Text=string.IsNullOrEmpty(selected)?"COM3":selected;}
+ void RefreshPorts() {var selected=Port.Text;Port.ItemsSource=CommunicationManager.GetPorts();Port.Text=string.IsNullOrEmpty(selected)?"COM3":selected;}
  void Refresh_Click(object sender,RoutedEventArgs e)=>RefreshPorts();
  // ---- Camera QR ----
  void LoadCamSources()
  {
-  try{var sources=CameraCatalog.List();CamSources.ItemsSource=sources;CamSources.SelectedItem=sources.FirstOrDefault(x=>x.Name.Contains("DroidCam",StringComparison.OrdinalIgnoreCase))??sources.FirstOrDefault();CamStatus.Text=sources.Count==0?"Không tìm thấy camera":"Chọn nguồn rồi nhấn Bật";}
+  try{var sources=camera.ListSources();CamSources.ItemsSource=sources;CamSources.SelectedItem=sources.FirstOrDefault(x=>x.Name.Contains("DroidCam",StringComparison.OrdinalIgnoreCase))??sources.FirstOrDefault();CamStatus.Text=sources.Count==0?"Không tìm thấy camera":"Chọn nguồn rồi nhấn Bật";}
   catch(Exception ex){CamStatus.Text="Lỗi liệt kê camera: "+ex.Message;}
  }
- void ApplyCamSettings()=>camScanner.Settings=new ScanSettings{Zoom=(float)CamZoom.Value,Enhance=CamEnhance.IsChecked==true,Invert=CamInvert.IsChecked==true,Sharpen=CamSharpen.IsChecked==true,ShowProcessed=CamShowProcessed.IsChecked==true};
+ void ApplyCamSettings()=>camera.SetSettings(new ScanSettings{Zoom=(float)CamZoom.Value,Enhance=CamEnhance.IsChecked==true,Invert=CamInvert.IsChecked==true,Sharpen=CamSharpen.IsChecked==true,ShowProcessed=CamShowProcessed.IsChecked==true});
  void CamSettings_Changed(object sender,RoutedEventArgs e){if(CamZoomLabel is null)return;CamZoomLabel.Text=$"{CamZoom.Value:F1}×";ApplyCamSettings();}
  async void CamToggle_Click(object sender,RoutedEventArgs e)
  {
@@ -86,7 +86,7 @@ public partial class MainWindow : Window
   if(CamSources.SelectedItem is not CameraSource src)return;
   camCancel=new();CamSources.IsEnabled=false;CamToggle.Content="Tắt";CamToggle.Background=new SolidColorBrush(Color.FromRgb(174,72,65));
   ApplyCamSettings();
-  try{camTask=camScanner.RunAsync(src.Index,camCancel.Token);await camTask;CamStatus.Text="Camera đã dừng";}
+  try{camTask=camera.RunAsync(src.Index,camCancel.Token);await camTask;CamStatus.Text="Camera đã dừng";}
   catch(OperationCanceledException){CamStatus.Text="Camera đã dừng";}
   catch(Exception ex){CamStatus.Text=ex.Message;}
   finally
@@ -99,21 +99,21 @@ public partial class MainWindow : Window
  }
  void OnCamCode(string code)
  {
-  currentQr=code;
+  qr.SetCode(code);currentQr=code;
   Interlocked.Exchange(ref _lastQrTicks,DateTimeOffset.Now.Ticks);
   QrInput.Text=code;
   QrState.Text="Camera: "+code;
   QrState.Foreground=new SolidColorBrush(Color.FromRgb(8,117,103));
   CamQrResult.Text=code;CamQrResult.Foreground=new SolidColorBrush(Color.FromRgb(7,95,89));
   // Reset gate sau 1.5s để camera liên tục xác nhận sản phẩm còn trong khung
-  Task.Delay(_rescanDelayMs).ContinueWith(_=>camScanner.ResetCodes());
+  Task.Delay(_rescanDelayMs).ContinueWith(_=>camera.ResetCodes());
  }
  void CamReset_Click(object sender,RoutedEventArgs e)
  {
-  currentQr="";Interlocked.Exchange(ref _lastQrTicks,0);
+  qr.Clear();currentQr="";Interlocked.Exchange(ref _lastQrTicks,0);
   QrInput.Text="";QrState.Text="Chưa quét mã";QrState.Foreground=new SolidColorBrush(Color.FromRgb(67,94,115));
   CamQrResult.Text="—";CamQrResult.Foreground=new SolidColorBrush(Color.FromRgb(7,95,89));
-  camScanner.ResetCodes();
+  camera.ResetCodes();
  }
  void CamDevSettings_Click(object sender,RoutedEventArgs e)
  {
@@ -125,7 +125,7 @@ public partial class MainWindow : Window
   if(e.Key!=Key.Enter)return;
   var code=QrInput.Text.Trim();
   if(code.Length==0)return;
-  currentQr=code;Interlocked.Exchange(ref _lastQrTicks,DateTimeOffset.Now.Ticks);QrState.Text="Đã quét: "+code;QrState.Foreground=new SolidColorBrush(Color.FromRgb(8,117,103));QrInput.SelectAll();e.Handled=true;
+  qr.SetCode(code);currentQr=code;Interlocked.Exchange(ref _lastQrTicks,DateTimeOffset.Now.Ticks);QrState.Text="Đã quét: "+code;QrState.Foreground=new SolidColorBrush(Color.FromRgb(8,117,103));QrInput.SelectAll();e.Handled=true;
  }
  async void ToggleConnection_Click(object sender,RoutedEventArgs e)
  {
@@ -144,53 +144,45 @@ public partial class MainWindow : Window
   Status.Text="● Đang kết nối…";rows.Clear();points.Clear();count=0;elapsed.Restart();
   LA.Text=LB.Text=CValue.Text=Compare.Text="—";DrawChart();
   sessionPath=null;
-  running=Task.Run(()=>ReadLoop(port,baud,interval,token));
+  var liveConnection=communication.Connect(port,baud);
+  ucService=new UC2836Service(liveConnection);
+  running=Task.Run(()=>ReadLoop(ucService,port,interval,token));
   try {await running;Status.Text="● Đã dừng · COM đã đóng";}
   catch(OperationCanceledException) {Status.Text="● Đã dừng · COM đã đóng";}
   catch(Exception ex) {Status.Text="● Lỗi: "+ex.Message; Raw.Text=ex.Message; File.AppendAllText(Path.Combine(AppContext.BaseDirectory,"errors.log"),DateTime.Now+" "+ex+Environment.NewLine);}
-  finally {running=null;elapsed.Stop();cancellation.Dispose();cancellation=null;Start.IsEnabled=Refresh.IsEnabled=Port.IsEnabled=Baud.IsEnabled=Interval.IsEnabled=true;Start.Content="Kết nối";Start.Background=new SolidColorBrush(Color.FromRgb(8,126,117));}
+  finally {running=null;ucService=null;session.Dispose();communication.Disconnect();elapsed.Stop();cancellation.Dispose();cancellation=null;Start.IsEnabled=Refresh.IsEnabled=Port.IsEnabled=Baud.IsEnabled=Interval.IsEnabled=true;Start.Content="Kết nối";Start.Background=new SolidColorBrush(Color.FromRgb(8,126,117));}
  }
- void ReadLoop(string port,int baud,int interval,CancellationToken token)
+ void ReadLoop(UC2836Service? service,string port,int interval,CancellationToken token)
  {
-  using var device=new Device(port,baud);
-  string Ask(string q) {token.ThrowIfCancellationRequested();return device.Query(q);}
-  var identity=Ask("*IDN?");
-  if(!identity.Contains("UC2836CX",StringComparison.OrdinalIgnoreCase))throw new IOException("Thiết bị không phải UC2836CX: "+identity);
-  var mode=Ask(":TRAN:MODE?");var dual=Ask(":TRAN:DF?")=="1";var dc=Ask(":TRAN:DCR?")=="1";
-  function=Ask("FUNC:IMP?").ToUpperInvariant();
-  var page=Ask("DISP:PAGE?").Replace(" ","").ToUpperInvariant();
-  var frequency=Ask("FREQ?");var voltage=Ask("VOLT?");var speed=Ask("APER?");var trigger=Ask("TRIG:SOUR?");
-  var dir=Path.Combine(AppContext.BaseDirectory,"Sessions");Directory.CreateDirectory(dir);
-  var path=Path.Combine(dir,$"UC2836_{DateTime.Now:yyyyMMdd_HHmmss_fff}.csv");
-  using var log=new StreamWriter(new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.Read),new UTF8Encoding(true)){AutoFlush=true};
-  log.WriteLine("Time,QRCode,PassFail,LA,LB,C,Compare,RA,RB,Polarity,Wire,Mode,Dual,DCR,Raw");
-  Dispatcher.Invoke(()=>{sessionPath=path;Identity.Text=identity;Status.Text="● LIVE · "+port;Settings.Text=$"Tần số: {frequency} Hz   ·   Điện áp: {voltage} V   ·   Tốc độ: {speed}   ·   Trigger: {trigger}   ·   Hai tần số: {(dual?"Bật":"Tắt")}";CLabel.Text="C · "+(dual?"N1":mode=="DEV"?"|LA − LB|":mode=="PEC"?"ĐỘ LỆCH %":mode);LogPath.Text="Tự lưu: "+path;});
+  if(service is null) throw new InvalidOperationException("Chưa có kết nối UC2836.");
+  var config=service.ReadConfiguration(); var mode=config.Mode; var dual=config.Dual; var dc=config.Dcr; function=config.Function;
+  session.Start(AppContext.BaseDirectory); var path=session.Path!;
+  Dispatcher.Invoke(()=>{sessionPath=path;Identity.Text=config.Identity;Status.Text="● LIVE · "+port;Settings.Text=$"Tần số: {config.Frequency} Hz   ·   Điện áp: {config.Voltage} V   ·   Tốc độ: {config.Speed}   ·   Trigger: {config.Trigger}   ·   Hai tần số: {(dual?"Bật":"Tắt")}";CLabel.Text="C · "+(dual?"N1":mode=="DEV"?"|LA − LB|":mode=="PEC"?"ĐỘ LỆCH %":mode);LogPath.Text="Tự lưu: "+path;});
   var pace=Stopwatch.StartNew();
   Dispatcher.Invoke(()=>{
    string Nice(string value,string unit)=>double.TryParse(value,NumberStyles.Float,CultureInfo.InvariantCulture,out var n)?Engineering.Format(n,unit):value;
-   Settings.Text=$"Tần số: {Nice(frequency,"Hz")}   ·   Điện áp: {Nice(voltage,"V")}   ·   Tốc độ: {speed}   ·   Trigger: {trigger}";
-   if(page.Contains("MEASDISPLAY")||page.Contains("LCRMEASDISP")){
+   Settings.Text=$"Tần số: {Nice(config.Frequency,"Hz")}   ·   Điện áp: {Nice(config.Voltage,"V")}   ·   Tốc độ: {config.Speed}   ·   Trigger: {config.Trigger}";
+   if(config.Page.Contains("MEASDISPLAY")||config.Page.Contains("LCRMEASDISP")){
     var units=Engineering.Units(function);PrimaryLabel.Text=units.nameA+" · THÔNG SỐ CHÍNH";SecondaryLabel.Text=units.nameB+" · THÔNG SỐ PHỤ";CLabel.Text="TRẠNG THÁI PHÉP ĐO";DcText.Text="Chờ kết quả đo";ChartLegend.Text=units.nameA+" · "+units.unitA;
    }
   });
-  device.FlushStaleResult(); // xả kết quả tồn đọng trước khi app kết nối
+  service.FlushStaleResult(); // xả kết quả tồn đọng trước khi app kết nối
   while(!token.IsCancellationRequested)
   {
    pace.Restart();
-   device.RequestMeasurement();
+   service.RequestMeasurement();
    string response="";
    while(!token.IsCancellationRequested)
    {
-    try {response=device.ReadMeasurement();if(response.Length>0)break;}
+    try {response=service.ReadMeasurement();if(response.Length>0)break;}
     catch(TimeoutException) {Dispatcher.Invoke(()=>{Status.Text="● Đã kết nối · Chờ phép đo / DUT";Stats.Text="Chưa có kết quả mới. Máy có thể đang chờ tự kích hoặc trigger ngoài.";});}
    }
    token.ThrowIfCancellationRequested();
    Measurement m;
    try
    {
-    var qrAgeSec=(DateTimeOffset.Now.Ticks-Interlocked.Read(ref _lastQrTicks))/(double)TimeSpan.TicksPerSecond;
-    var freshQr=!string.IsNullOrEmpty(currentQr)&&qrAgeSec<=_qrMaxAgeSec?currentQr:"";
-    m=Measurement.Parse(response,dual,dc) with {Function=function, QrCode=freshQr, PassFail=Classify(response,function)};
+    var freshQr=qr.GetFreshCode(_qrMaxAgeSec);
+    m=service.ParseMeasurement(response,config,freshQr,port).Measurement;
     if(_requireQrForRecord&&string.IsNullOrWhiteSpace(m.QrCode))
     {
      Dispatcher.Invoke(()=>{Status.Text="● Đã kết nối · Chờ QR — bỏ qua kết quả không có mã";Stats.Text="Đã bỏ qua kết quả: chưa có QR hợp lệ.";});
@@ -198,10 +190,9 @@ public partial class MainWindow : Window
     }
    }
    catch(FormatException ex){Dispatcher.Invoke(()=>{Status.Text="● Đã kết nối · Dữ liệu chưa nhận dạng";Raw.Text=ex.Message;});continue;}
-   static string Quote(string s)=>"\""+s.Replace("\"","\"\"")+"\"";
-   log.WriteLine(string.Join(",",new[]{m.Time.ToString("O"),m.QrCode,m.PassFail,m.LAText,m.LBText,m.CText,m.Compare,m.RA,m.RB,m.Polarity,m.Wire,mode,dual.ToString(),dc.ToString(),m.Raw}.Select(Quote)));
    var hadQr=!string.IsNullOrEmpty(m.QrCode);
-   if(hadQr){currentQr="";Interlocked.Exchange(ref _lastQrTicks,0);}
+   session.Append(m,mode,dual,dc);
+   if(hadQr){qr.Clear();currentQr="";Interlocked.Exchange(ref _lastQrTicks,0);}
    Dispatcher.Invoke(()=>
    {
     Display(m);
@@ -216,22 +207,9 @@ public partial class MainWindow : Window
    // Camera tự re-scan qua OnCamCode → không cần reset thủ công tại đây
    int delay=Math.Max(0,interval-(int)pace.ElapsedMilliseconds);
    if(token.WaitHandle.WaitOne(delay))break;
- }
- }
- static string Classify(string raw,string function)
- {
-  var v=raw.Split(',').Select(x=>x.Trim()).ToArray();
-  if(v.Length<3)return "LỖI DỮ LIỆU";
-  if(!function.Contains("TRAN",StringComparison.OrdinalIgnoreCase) && v.Length is 3 or 4)
-  {
-   if(int.TryParse(v[2],out var status)&&status!=0)return "LỖI PHÉP ĐO";
-   if(v.Length==4&&int.TryParse(v[3],out var lcrBin))return lcrBin is >=1 and <=9?"PASS":lcrBin==0?"FAIL / CHƯA SO SÁNH":lcrBin==10?"AUX":"FAIL";
-   return "ĐÃ ĐO";
   }
-  if(v.Length>=6&&int.TryParse(v[3],out var bin))return bin is >=1 and <=9?"PASS":bin==0?"FAIL / CHƯA SO SÁNH":bin==10?"AUX":"FAIL";
-  return "ĐÃ ĐO";
  }
- void Display(Measurement m)
+  void Display(Measurement m)
  {
   count++;Status.Text="● LIVE · "+Port.Text;LA.Text=m.DisplayA;LB.Text=m.DisplayB;CValue.Text=m.PassFail;Compare.Text=m.PassFail;
   QrState.Text=string.IsNullOrWhiteSpace(m.QrCode)?"Chưa quét mã":"Mã QR: "+m.QrCode+" · "+m.PassFail;
