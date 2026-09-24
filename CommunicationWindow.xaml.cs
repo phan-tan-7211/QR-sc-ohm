@@ -18,14 +18,17 @@ public partial class CommunicationWindow : Window
     readonly CancellationTokenSource lifetime = new();
     PreviewFrame? frame;
     bool entering;
+    bool changingLanguage;
 
     public CommunicationWindow(CommunicationManager communication, CameraService camera, QrDecoderService qr, SessionService session)
     {
         InitializeComponent();
         this.communication = communication; this.camera = camera; this.qr = qr; this.session = session;
+        LanguageSelector.SelectedValue = LocalizationManager.CurrentLanguage;
+        LocalizationManager.LanguageChanged += RefreshLocalizedRuntimeText;
         communication.StateChanged += state => Dispatcher.Invoke(() => { UcState.Text = "● " + state.ToString().ToUpperInvariant(); UcState.Foreground = state == ConnectionState.Connected ? Brushes.DarkCyan : Brushes.IndianRed; RefreshReadiness(); });
         camera.FrameReady += f => Interlocked.Exchange(ref frame, f);
-        camera.CodeRead += code => Dispatcher.Invoke(() => { qr.SetCode(code); LastQr.Text = "Last QR: " + code; QrState.Text = "QR Decoder  ● READY"; RefreshReadiness(); });
+        camera.CodeRead += code => Dispatcher.Invoke(() => { qr.SetCode(code); LastQr.Text = LocalizationManager.Get("Communication.LastQrPrefix") + code; QrState.Text = "QR Decoder  ● READY"; RefreshReadiness(); });
         camera.StatusChanged += status => Dispatcher.Invoke(() => { CameraState.Text = "● " + status; RefreshReadiness(); });
         camera.StateChanged += state => Dispatcher.Invoke(() => { CameraState.Text = "● " + state.ToString().ToUpperInvariant(); RefreshReadiness(); });
         Loaded += (_, _) => InitializeCommunication();
@@ -33,6 +36,9 @@ public partial class CommunicationWindow : Window
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
         timer.Tick += (_, _) => RenderFrame(); timer.Start();
     }
+    static string L(string key) => LocalizationManager.Get(key);
+    void RefreshLocalizedRuntimeText() { if (CameraSources is null) return; changingLanguage = true; LanguageSelector.SelectedValue = LocalizationManager.CurrentLanguage; changingLanguage = false; }
+    void LanguageSelector_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (!changingLanguage && LanguageSelector.SelectedValue is string code) LocalizationManager.SetLanguage(code); }
 
     async void InitializeCommunication()
     {
@@ -104,7 +110,7 @@ public partial class CommunicationWindow : Window
         Readiness.Text = $"UC2836 {(uc ? "✓" : "○")}   CAMERA {(cam ? "✓" : "○")}   QR {(qrReady ? "✓" : "○")}   STORAGE {(storage ? "✓" : "○")}";
         var ready = uc && cam && qrReady && storage;
         EnterSystem.IsEnabled = ready && !entering;
-        SystemState.Text = ready ? "SYSTEM READY" : "SYSTEM NOT READY";
+        SystemState.Text = ready ? LocalizationManager.Get("Communication.SystemReady") : LocalizationManager.Get("Communication.SystemNotReady");
         SystemState.Foreground = ready ? Brushes.DarkCyan : Brushes.IndianRed;
     }
     void EnterSystem_Click(object sender, RoutedEventArgs e)
