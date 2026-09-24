@@ -3,6 +3,7 @@ bin/
 obj/
 release/
 release-*/
+tools/WPFVisualTreeMcp/
 Sessions/
 *.user
 *.suo
