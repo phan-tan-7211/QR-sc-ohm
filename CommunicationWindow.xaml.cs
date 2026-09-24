@@ -27,6 +27,7 @@ public partial class CommunicationWindow : Window
         camera.FrameReady += f => Interlocked.Exchange(ref frame, f);
         camera.CodeRead += code => Dispatcher.Invoke(() => { qr.SetCode(code); LastQr.Text = "Last QR: " + code; QrState.Text = "QR Decoder  ● READY"; RefreshReadiness(); });
         camera.StatusChanged += status => Dispatcher.Invoke(() => { CameraState.Text = "● " + status; RefreshReadiness(); });
+        camera.StateChanged += state => Dispatcher.Invoke(() => { CameraState.Text = "● " + state.ToString().ToUpperInvariant(); RefreshReadiness(); });
         Loaded += (_, _) => InitializeCommunication();
         Closed += (_, _) => lifetime.Cancel();
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
@@ -97,7 +98,7 @@ public partial class CommunicationWindow : Window
     void RefreshReadiness()
     {
         var uc = communication.State == ConnectionState.Connected;
-        var cam = camera.IsStreaming && Preview.Source is not null;
+        var cam = camera.State is ComponentState.Streaming or ComponentState.Ready && Preview.Source is not null;
         var storage = StorageState.Text.Contains("READY", StringComparison.OrdinalIgnoreCase);
         var qrReady = cam;
         Readiness.Text = $"UC2836 {(uc ? "✓" : "○")}   CAMERA {(cam ? "✓" : "○")}   QR {(qrReady ? "✓" : "○")}   STORAGE {(storage ? "✓" : "○")}";
